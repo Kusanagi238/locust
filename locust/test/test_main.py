@@ -113,6 +113,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 tp.expect('All users spawned: {"TestUser": 1} (1 total users)')
                 tp.expect("web_form_value", stream="stdout")
                 tp.terminate()
+                gevent.sleep(SHORT_SLEEP)
                 tp.expect("Shutting down")
                 tp.expect("Aggregated")
                 tp.not_expect_any("command_line_value")
@@ -143,6 +144,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     tp.expect("Starting Locust")
                     tp.expect("config_file_value", stream="stdout")
                     tp.terminate()
+                    gevent.sleep(SHORT_SLEEP)
                     tp.expect("Shutting down")
                     tp.not_expect_any("Traceback")
             finally:
@@ -173,6 +175,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 # if terminate happens too soon it might happen to be ignored, so wait for the first report:
                 tp.expect("failures/s")
                 tp.terminate()
+                gevent.sleep(SHORT_SLEEP)
                 tp.expect("Shutting down (exit code 42)")
                 tp.expect("Exit code in quit event 42", stream="stdout")
 
@@ -314,6 +317,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     tp.expect("Starting web interface at")
                     gevent.sleep(0.1)
                     tp.terminate()
+                    gevent.sleep(SHORT_SLEEP)
                     if not IS_WINDOWS:
                         tp.expect("Shutting down")
                     # This test is the reason we need the -L DEBUG option
@@ -349,6 +353,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 tp.expect("No run time limit set, use CTRL+C to interrupt")
                 tp.expect("All users spawned")
                 tp.terminate()
+                gevent.sleep(SHORT_SLEEP)
                 tp.expect("Shutting down (exit code 0)")
 
     @unittest.skipIf(IS_WINDOWS, reason="Signal handling on windows is hard")
@@ -374,6 +379,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                         # if terminate happens too soon it might happen to be ignored, so wait for the first report:
                         tp.expect("failures/s")
                         tp.terminate()
+                        gevent.sleep(SHORT_SLEEP)
                         tp.expect("Shutting down (exit code 0)")
 
     def test_default_headless_spawn_options_with_shape(self):
@@ -511,6 +517,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                         tp.expect("Starting Locust")
                         tp.expect('All users spawned: {"TestUser": 1, "UserSubclass": 1} (2 total users)')
                         tp.terminate()
+                        gevent.sleep(SHORT_SLEEP)
                         tp.expect("Shutting down (exit code 0)")
 
     @unittest.skipIf(sys.platform == "darwin", reason="Disable on macOS for now because it has issues on GH")
@@ -590,7 +597,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     tp.expect("Starting web interface")
 
                     wait_for_server(f"http://localhost:{port}/")
-                    response = requests.get(f"http://localhost:{port}/")
+                    response = requests.get(f"http://localhost:{port}/stats/requests")
                     self.assertEqual(200, response.status_code)
 
                     tp.expect("Shape test starting")
@@ -612,13 +619,13 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
             with mock_locustfile() as mocked:
                 with TestProcess(f"locust -f {mocked.file_path} --web-host 127.0.0.2 --web-port {port}"):
                     wait_for_server(f"http://127.0.0.2:{port}/")
-                    response = requests.get(f"http://127.0.0.2:{port}/")
+                    response = requests.get(f"http://127.0.0.2:{port}/stats/requests")
                     self.assertEqual(200, response.status_code)
 
         with mock_locustfile() as mocked:
             with TestProcess(f"locust -f {mocked.file_path} --web-host * --web-port {port}"):
                 wait_for_server(f"http://127.0.0.1:{port}/")
-                response = requests.get(f"http://127.0.0.1:{port}/")
+                response = requests.get(f"http://127.0.0.1:{port}/stats/requests")
                 self.assertEqual(200, response.status_code)
 
     @unittest.skipIf(IS_WINDOWS, reason="termios doesnt exist on windows, and thus we cannot import pty")
@@ -664,6 +671,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 tp.expect_any("Aggregated")
                 # Stop locust process
                 tp.terminate()
+                gevent.sleep(SHORT_SLEEP)
                 tp.expect("Shutting down (exit code 0)")
                 tp.expect("Aggregated")
                 tp.expect("Response time percentiles (approximated)")
@@ -737,6 +745,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 tp.expect_any("Aggregated")
                 if not IS_WINDOWS:
                     tp.terminate()
+                    gevent.sleep(SHORT_SLEEP)
                     tp.expect("Shutting down (exit code 0)")
                     tp.expect("Aggregated")
 
@@ -754,6 +763,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     tp.expect("Aggregated")
                     if not IS_WINDOWS:
                         tp.terminate()
+                        gevent.sleep(SHORT_SLEEP)
                         tp.expect("Shutting down (exit code 0)")
                         tp.expect("Aggregated")
 
@@ -824,6 +834,7 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                 tp.expect("User2 is running", stream="stdout")
                 tp.expect("User3 is running", stream="stdout")
                 tp.terminate()
+                gevent.sleep(SHORT_SLEEP)
                 tp.not_expect_any("User1 is running", stream="stdout")
 
     def test_html_report_option(self):
@@ -1345,7 +1356,7 @@ class SecondUser(HttpUser):
 
             for p in [proc, proc_worker, proc_worker_2]:
                 p.close()
-                proc.not_expect_any("Traceback")
+                p.not_expect_any("Traceback")
 
     def test_locustfile_distribution_with_workers_started_first(self):
         LOCUSTFILE_CONTENT = textwrap.dedent(

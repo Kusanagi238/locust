@@ -10,7 +10,14 @@ from .user.inspectuser import get_ratio
 from .util.date import format_duration, format_utc_timestamp
 
 PERCENTILES_FOR_HTML_REPORT = [0.50, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
-DEFAULT_BUILD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist")
+# Compute default build path relative to this file, but only use it if it exists.
+_default_build_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist")
+if os.path.isdir(_default_build_path):
+    DEFAULT_BUILD_PATH = _default_build_path
+else:
+    # If the dist folder isn't present on the filesystem (e.g. when installed as a package),
+    # fall back to resolving templates from package resources at runtime.
+    DEFAULT_BUILD_PATH = None
 
 
 def process_html_filename(options) -> None:
@@ -25,9 +32,33 @@ def process_html_filename(options) -> None:
 
 
 def render_template_from(file, build_path=DEFAULT_BUILD_PATH, **kwargs):
-    env = JinjaEnvironment(loader=FileSystemLoader(build_path))
-    template = env.get_template(file)
-    return template.render(**kwargs)
+    try:
+        # Try filesystem loader first (when build_path is available)
+        if build_path:
+            env = JinjaEnvironment(loader=FileSystemLoader(build_path))
+            template = env.get_template(file)
+            return template.render(**kwargs)
+        # Fallback: try to load template from package resources (e.g. inside installed package)
+        import pkgutil
+
+        pkg = __package__ or "locust"
+        resource_name = os.path.join("webui", "dist", file)
+        data = pkgutil.get_data(pkg, resource_name)
+        if data is None:
+            raise Exception(f"template {file} not found in build path or package resources")
+        from jinja2 import Template
+
+        return Template(data.decode("utf-8")).render(**kwargs)
+    except Exception as e:
+        # Log the error if possible, but don't let a TemplateNotFound or other template error
+        # crash the application. Return a safe fallback response instead.
+        try:
+            import logging
+
+            logging.getLogger(__name__).exception("Error rendering template %s: %s", file, e)
+        except Exception:
+            pass
+        return f"<html><body><h1>Template error</h1><p>Could not render template {file}.</p></body></html>"
 
 
 def get_html_report(

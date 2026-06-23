@@ -153,16 +153,23 @@ class WebUI:
         self.tls_key = tls_key
         self.userclass_picker_is_active = userclass_picker_is_active
         self.web_login = web_login
-        app = Flask(__name__)
+        app = Flask(__name__, template_folder=build_path or DEFAULT_BUILD_PATH)
         CORS(app)
         self.app = app
+        # Ensure Jinja loader uses the template folder provided at Flask init
+        try:
+            from jinja2 import FileSystemLoader
+
+            app.jinja_loader = FileSystemLoader(self.app.template_folder)
+        except Exception:
+            # If we for some reason can't set the loader explicitly, rely on Flask's default behavior
+            pass
         app.jinja_env.add_extension("jinja2.ext.do")
         app.debug = True
         self.greenlet: gevent.Greenlet | None = None
         self._swarm_greenlet: gevent.Greenlet | None = None
         self.template_args = {}
         self.auth_args = {}
-        self.app.template_folder = build_path or DEFAULT_BUILD_PATH
         self.app.static_url_path = "/assets/"
 
         app_blueprint = Blueprint("locust", __name__, url_prefix=web_base_path)

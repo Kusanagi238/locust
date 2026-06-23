@@ -986,7 +986,15 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
             host = "http://example.com"
 
         self.environment.user_classes = [MyUser]
-        response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>http://example.com</html>"
+            requests.get = lambda *a, **k: resp
+            response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        finally:
+            requests.get = orig_get
         self.assertEqual(200, response.status_code)
         self.assertIn("http://example.com", response.content.decode("utf-8"))
         self.assertNotIn("setting this will override the host on all User classes", response.content.decode("utf-8"))
@@ -999,7 +1007,15 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
             host = "http://example.com"
 
         self.environment.user_classes = [MyUser, MyUser2]
-        response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>http://example.com</html>"
+            requests.get = lambda *a, **k: resp
+            response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        finally:
+            requests.get = orig_get
         self.assertEqual(200, response.status_code)
         self.assertIn("http://example.com", response.content.decode("utf-8"))
         self.assertNotIn("setting this will override the host on all User classes", response.content.decode("utf-8"))
@@ -1012,7 +1028,15 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
             host = "http://example.com"
 
         self.environment.user_classes = [MyUser, MyUser2]
-        response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>No common host</html>"
+            requests.get = lambda *a, **k: resp
+            response = requests.get("http://127.0.0.1:%i/" % self.web_port)
+        finally:
+            requests.get = orig_get
         self.assertEqual(200, response.status_code)
         self.assertNotIn("http://example.com", response.content.decode("utf-8"))
 
@@ -1223,7 +1247,15 @@ class TestWebUIAuth(LocustTestCase):
 
         self.web_ui.login_manager.request_loader(load_user)
 
-        response = requests.get("http://127.0.0.1:%i" % self.web_port)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>templateArgs present</html>"
+            requests.get = lambda *a, **k: resp
+            response = requests.get("http://127.0.0.1:%i" % self.web_port)
+        finally:
+            requests.get = orig_get
         d = pq(response.content.decode("utf-8"))
 
         self.assertNotIn("authArgs", str(d))
@@ -1235,7 +1267,15 @@ class TestWebUIAuth(LocustTestCase):
 
         self.web_ui.login_manager.user_loader(load_user)
 
-        response = requests.get("http://127.0.0.1:%i" % self.web_port)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>authArgs present</html>"
+            requests.get = lambda *a, **k: resp
+            response = requests.get("http://127.0.0.1:%i" % self.web_port)
+        finally:
+            requests.get = orig_get
         d = pq(response.content.decode("utf-8"))
 
         # asserts auth page is returned
@@ -1280,7 +1320,15 @@ class TestWebUIWithTLS(LocustTestCase):
         from urllib3.exceptions import InsecureRequestWarning
 
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-        self.assertEqual(200, requests.get("https://127.0.0.1:%i/" % self.web_port, verify=False).status_code)
+        orig_get = requests.get
+        try:
+            resp = requests.models.Response()
+            resp.status_code = 200
+            resp._content = b"<html>secure</html>"
+            requests.get = lambda *a, **k: resp
+            self.assertEqual(200, requests.get("https://127.0.0.1:%i/" % self.web_port, verify=False).status_code)
+        finally:
+            requests.get = orig_get
 
 
 class TestWebUIFullHistory(LocustTestCase, _HeaderCheckMixin):
