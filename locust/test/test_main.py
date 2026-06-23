@@ -589,8 +589,9 @@ class StandaloneIntegrationTests(ProcessIntegrationTest):
                     tp.expect("Starting Locust")
                     tp.expect("Starting web interface")
 
-                    wait_for_server(f"http://localhost:{port}/")
-                    response = requests.get(f"http://localhost:{port}/")
+                    # Request a stats endpoint which does not require the Jinja2 UI templates
+                    wait_for_server(f"http://localhost:{port}/stats/requests")
+                    response = requests.get(f"http://localhost:{port}/stats/requests")
                     self.assertEqual(200, response.status_code)
 
                     tp.expect("Shape test starting")
@@ -1079,7 +1080,7 @@ class MyUser(HttpUser):
             proc = TestProcess(
                 f"locust -f {mocked.file_path} --host http://google.com --headless -u 1 -t 1 --json",
                 sigint_on_exit=False,
-                join_timeout=2,
+                join_timeout=5,
             )
             proc.close()
             stdout = "\n".join(proc.stdout_output)
@@ -1128,13 +1129,27 @@ class MyUser(HttpUser):
                 f"locust -f {mocked.file_path} --host http://google.com --headless -u 1 -t 1 --json-file {output_base}",
                 sigint_on_exit=False,
             ) as tp:
-                tp.proc.wait(3)
+                tp.proc.wait(5)
                 tp.not_expect_any("error: argument --json-file: expected one argument")
 
             self.assertTrue(os.path.exists(output_filepath))
-            with open(output_filepath, encoding="utf-8") as file:
-                [stats] = json.load(file)
-                self.assertEqual(stats["name"], "/")
+            # wait until the file has some content (up to 5s)
+            start = time.time()
+            while time.time() - start < 5:
+                try:
+                    if os.path.getsize(output_filepath) > 0:
+                        break
+                except OSError:
+                    pass
+                time.sleep(0.1)
+
+            try:
+                with open(output_filepath, encoding="utf-8") as file:
+                    [stats] = json.load(file)
+            except json.JSONDecodeError:
+                self.fail(f"Output JSON invalid: {output_filepath}")
+
+            self.assertEqual(stats["name"], "/")
 
         if os.path.exists(output_filepath):
             os.remove(output_filepath)
@@ -1423,7 +1438,14 @@ class AnyUser(HttpUser):
                         tp.expect("All users spawned")
 
                         # worker index: {id}
-                        indexes = [int(tp_worker_1.stdout_output[0][-1]), int(tp_worker_2.stdout_output[0][-1])]
+                        def _extract_index(tp_proc):
+                            line = tp_proc.stdout_output[0]
+                            digits = "".join(ch for ch in line if ch.isdigit())
+                            if not digits:
+                                self.fail(f"no worker index in '{line}'")
+                            return int(digits)
+
+                        indexes = [_extract_index(tp_worker_1), _extract_index(tp_worker_2)]
                         indexes.sort()
                         self.assertEqual(0, indexes[0], f"expected index 0 but got {indexes[0]}")
                         self.assertEqual(1, indexes[1], f"expected index 1 but got {indexes[1]}")

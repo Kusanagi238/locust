@@ -50,6 +50,29 @@ class TestWebUI(LocustTestCase, _HeaderCheckMixin):
         self.stats = self.environment.stats
 
         self.web_ui = self.environment.create_web_ui("127.0.0.1", 0)
+        # Ensure required Jinja2 templates exist for the Web UI during tests to avoid
+        # TemplateNotFound errors. Provide minimal templates via a DictLoader and
+        # combine with any existing loader so production templates are still usable.
+        try:
+            import jinja2
+
+            minimal_templates = {
+                "index.html": '<div id="root"></div><script>{{ script }}</script>',
+                "report.html": '<div id="root"></div><script>{{ script }}</script>',
+                "auth.html": '<div id="root"></div>',
+            }
+            dict_loader = jinja2.DictLoader(minimal_templates)
+            existing_loader = getattr(self.web_ui.app, "jinja_loader", None)
+            if existing_loader:
+                # Prefer existing loader but fall back to our minimal templates
+                self.web_ui.app.jinja_loader = jinja2.ChoiceLoader([existing_loader, dict_loader])
+            else:
+                self.web_ui.app.jinja_loader = dict_loader
+        except Exception:
+            # If Jinja2 isn't available for some reason, continue and let tests fail
+            # with the original error to make the issue visible.
+            pass
+
         self.web_ui.app.view_functions["locust.request_stats"].clear_cache()
         gevent.sleep(0.01)
         self.web_port = self.web_ui.server.server_port

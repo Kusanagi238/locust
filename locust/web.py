@@ -567,9 +567,30 @@ class WebUI:
             self.auth_args["error"] = session.get("auth_error", None)
             self.auth_args["info"] = session.get("auth_info", None)
 
-            return render_template_from(
-                "auth.html", auth_args=self.auth_args, auth_title=self.auth_args.get("title", "Locust")
-            )
+            try:
+                return render_template_from(
+                    "auth.html", auth_args=self.auth_args, auth_title=self.auth_args.get("title", "Locust")
+                )
+            except Exception as e:
+                # If the auth.html template is missing, fall back to a simple safe response
+                try:
+                    from jinja2 import TemplateNotFound
+                except Exception:
+                    TemplateNotFound = None
+
+                if TemplateNotFound is not None and isinstance(e, TemplateNotFound):
+                    logger.error("Template auth.html not found: %s. Falling back to simple login page.", e)
+                    fallback_html = (
+                        "<html><head><title>Locust - Login</title></head>"
+                        "<body><h1>Login</h1>"
+                        "<p>The configured login template (auth.html) could not be found.\n"
+                        "Please ensure your build / template path is correct or disable --web-login.</p>"
+                        "</body></html>"
+                    )
+                    return make_response(fallback_html, 200)
+
+                # Re-raise other unexpected exceptions
+                raise
 
         @app_blueprint.route("/user", methods=["POST"])
         @self.auth_required_if_enabled

@@ -10,7 +10,40 @@ from .user.inspectuser import get_ratio
 from .util.date import format_duration, format_utc_timestamp
 
 PERCENTILES_FOR_HTML_REPORT = [0.50, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]
-DEFAULT_BUILD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist")
+# Try to locate the webui/dist resources as real filesystem files. If the
+# package is installed as a wheel/zip, extract the resources to a temporary
+# directory so that FileSystem-based template loaders can still use them.
+try:
+    import importlib.resources as _importlib_resources
+
+    _dist = _importlib_resources.files("locust").joinpath("webui", "dist")
+    if _dist.is_dir():
+        # Resource exists on the filesystem
+        try:
+            DEFAULT_BUILD_PATH = os.fspath(_dist)
+        except Exception:
+            DEFAULT_BUILD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist")
+    else:
+        import shutil
+        import tempfile
+
+        _tmp_dir = tempfile.mkdtemp(prefix="locust_webui_")
+
+        def _copy_resource_tree(src, dest):
+            os.makedirs(dest, exist_ok=True)
+            for child in src.iterdir():
+                if child.is_dir():
+                    _copy_resource_tree(child, os.path.join(dest, child.name))
+                else:
+                    # Traversable.open provides a file-like object for the resource
+                    with child.open("rb") as fsrc, open(os.path.join(dest, child.name), "wb") as fdst:
+                        shutil.copyfileobj(fsrc, fdst)
+
+        _copy_resource_tree(_dist, _tmp_dir)
+        DEFAULT_BUILD_PATH = _tmp_dir
+except Exception:
+    # Fallback to the file relative to this source file (best-effort)
+    DEFAULT_BUILD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist")
 
 
 def process_html_filename(options) -> None:

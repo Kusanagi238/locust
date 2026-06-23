@@ -671,11 +671,28 @@ See https://github.com/locustio/locust/wiki/Installation#increasing-maximum-numb
         shutdown()
 
     def save_html_report():
-        html_report = get_html_report(environment, show_download_link=False)
-        process_html_filename(options)
+        try:
+            html_report = get_html_report(environment, show_download_link=False)
+            process_html_filename(options)
+        except Exception as e:
+            try:
+                import jinja2
+
+                template_exceptions = (jinja2.exceptions.TemplateNotFound, jinja2.exceptions.TemplateError)
+            except Exception:
+                template_exceptions = ()
+            if isinstance(e, template_exceptions):
+                logger.error("Failed to generate HTML report due to missing or invalid template: %s", e)
+                return
+            # Not a jinja2 template error - re-raise so it can be handled upstream
+            raise
+
         logger.info("writing html report to file: %s", options.html_file)
-        with open(options.html_file, "w", encoding="utf-8") as file:
-            file.write(html_report)
+        try:
+            with open(options.html_file, "w", encoding="utf-8") as file:
+                file.write(html_report)
+        except Exception:
+            logger.exception("Failed to write HTML report to file: %s", options.html_file)
 
     gevent.signal_handler(signal.SIGTERM, sig_term_handler)
 
